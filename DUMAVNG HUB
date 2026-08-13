@@ -384,7 +384,7 @@ StyleText(OpenButton)
 local Main = Instance.new("Frame")
 Main.Name = "Main"
 Main.Size = UDim2.new(0, 315, 0, 285)
-Main.Position = UDim2.new(0.5, -157, 0.5, -167)
+Main.Position = UDim2.new(0.5, -157, 0.5, -260)
 Main.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
 Main.BackgroundTransparency = 0.35
 Main.BorderSizePixel = 0
@@ -408,6 +408,7 @@ Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = TitleBar
 StyleText(Title)
 
+TitleBar.Active = true
 MakeDraggable(Main, TitleBar)
 
 --========================================================--
@@ -415,9 +416,12 @@ MakeDraggable(Main, TitleBar)
 --========================================================--
 
 local FlyEnabled = false
-local FlySpeed = 80
+local FlySpeed = 100
 local FlyBV = nil
 local FlyBG = nil
+local FlyVertical = 0
+local FlyUpButton = nil
+local FlyDownButton = nil
 
 local function GetJoystickVector()
 	local Success, Result = pcall(function()
@@ -438,6 +442,14 @@ end
 
 local function StopFly()
 	FlyEnabled = false
+	FlyVertical = 0
+
+	if FlyUpButton then
+		FlyUpButton.Visible = false
+	end
+	if FlyDownButton then
+		FlyDownButton.Visible = false
+	end
 
 	if FlyBV then
 		FlyBV:Destroy()
@@ -477,6 +489,13 @@ local function StartFly()
 	FlyEnabled = true
 	Humanoid.PlatformStand = true
 
+	if FlyUpButton then
+		FlyUpButton.Visible = true
+	end
+	if FlyDownButton then
+		FlyDownButton.Visible = true
+	end
+
 	FlyBV = Instance.new("BodyVelocity")
 	FlyBV.MaxForce = Vector3.new(99999, 99999, 99999)
 	FlyBV.Velocity = Vector3.new(0, 0, 0)
@@ -512,6 +531,24 @@ local function CreateButton(Name, Text, Y)
 	return Button
 end
 
+-- SERVER LAG SECTION TITLE
+local LagTitle = Instance.new("TextLabel")
+LagTitle.Name = "LagTitle"
+LagTitle.Size = UDim2.new(1, -24, 0, 36)
+LagTitle.Position = UDim2.new(0, 12, 0, 370)
+LagTitle.BackgroundColor3 = Color3.fromRGB(0,0,0)
+LagTitle.BorderSizePixel = 1
+LagTitle.BorderColor3 = Color3.fromRGB(0,0,0)
+LagTitle.Text = "🌍 CÓ PHẢI BẠN ĐANG LAG ?"
+LagTitle.TextSize = 18
+LagTitle.Parent = Main
+StyleText(LagTitle)
+
+local RejoinServer = CreateButton("RejoinServer", "🔄 VÀO LẠI SERVER", 410)
+local SmoothServer = CreateButton("SmoothServer", "⚡ VÀO SERVER MƯỢT", 455)
+local LowPlayerServer = CreateButton("LowPlayerServer", "👥 VÀO SERVER ÍT NGƯỜI", 500)
+
+
 local ResetButton = CreateButton("ResetScript", "RESET SCRIPT", 56)
 local ESPButton = CreateButton("ESP", "ESP ⚡ OFF", 101)
 local FullBrightButton = CreateButton("FullBright", "FULLBRIGHT ⚡ OFF", 146)
@@ -531,16 +568,161 @@ FlySpeedBox.BorderSizePixel = 1
 FlySpeedBox.BorderColor3 = Color3.fromRGB(0, 0, 0)
 FlySpeedBox.Text = tostring(FlySpeed)
 FlySpeedBox.TextSize = 15
-FlySpeedBox.ClearTextOnFocus = false
+FlySpeedBox.ClearTextOnFocus = true
 FlySpeedBox.Parent = Main
 StyleText(FlySpeedBox)
+
+FlySpeedBox.Focused:Connect(function()
+	FlySpeedBox.Text = ""
+end)
+
+-- Slider dengan nút kéo hình máy bay
+local FlySlider = Instance.new("Frame")
+FlySlider.Name = "FlySlider"
+FlySlider.Size = UDim2.new(1, -24, 0, 120)
+FlySlider.Position = UDim2.new(0, 12, 0, 325)
+FlySlider.BackgroundColor3 = Color3.fromRGB(40,40,40)
+FlySlider.BackgroundTransparency = 1
+FlySlider.Parent = Main
+
+-- Thanh hiển thị Fly Speed
+local FlySliderLine = Instance.new("Frame")
+FlySliderLine.Name = "FlySliderLine"
+FlySliderLine.Size = UDim2.new(1, -30, 0, 4)
+FlySliderLine.Position = UDim2.new(0, 15, 0, 10)
+FlySliderLine.BackgroundColor3 = Color3.fromRGB(255,255,255)
+FlySliderLine.BorderSizePixel = 0
+FlySliderLine.Parent = FlySlider
+
+local FlySliderLineCorner = Instance.new("UICorner")
+FlySliderLineCorner.CornerRadius = UDim.new(1,0)
+FlySliderLineCorner.Parent = FlySliderLine
+
+local FlySliderButton = Instance.new("TextButton")
+FlySliderButton.Name = "FlySliderButton"
+FlySliderButton.Text = "✈"
+FlySliderButton.TextSize = 20
+FlySliderButton.Size = UDim2.new(0,30,0,30)
+FlySliderButton.Position = UDim2.new(0.5,-15,0,-5)
+FlySliderButton.BackgroundTransparency = 1
+FlySliderButton.Parent = FlySlider
+
+local function UpdateFlySlider()
+	local x = math.clamp((FlySpeed - 10) / 290, 0, 1)
+	FlySliderButton.Position = UDim2.new(x, -15, 0, -5)
+end
+
+UpdateFlySlider()
+
+local draggingSlider = false
+local sliderInput = nil
+
+FlySlider.Active = true
+FlySliderButton.Active = true
+
+local function SetFlyFromSliderX(x)
+	x = math.clamp(x, 0, 1)
+	local NewSpeed = math.floor(10 + x * 290 + 0.5)
+	if NewSpeed ~= FlySpeed then
+		FlySpeed = NewSpeed
+		FlySpeedBox.Text = tostring(FlySpeed)
+	end
+	FlySliderButton.Position = UDim2.new(x, -15, 0, -5)
+end
+
+local function MoveSliderFromPosition(pos)
+	local x = (pos.X - FlySlider.AbsolutePosition.X) / FlySlider.AbsoluteSize.X
+	SetFlyFromSliderX(x)
+end
+
+local function StartSlider(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+	or input.UserInputType == Enum.UserInputType.Touch then
+		draggingSlider = true
+		sliderInput = input
+		MoveSliderFromPosition(input.Position)
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				draggingSlider = false
+				sliderInput = nil
+			end
+		end)
+	end
+end
+
+FlySliderButton.InputBegan:Connect(StartSlider)
+FlySlider.InputBegan:Connect(StartSlider)
+
+UIS.InputChanged:Connect(function(input)
+	if not draggingSlider or input ~= sliderInput then
+		return
+	end
+	MoveSliderFromPosition(input.Position)
+end)
+
+UIS.InputChanged:Connect(function(input)
+	if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+		MoveSliderFromPosition(input.Position)
+	end
+end)
 
 local FlySpeedPlus = CreateButton("FlySpeedPlus", "+10", 281)
 FlySpeedPlus.Size = UDim2.new(0, 60, 0, 34)
 FlySpeedPlus.Position = UDim2.new(1, -72, 0, 281)
 
+
+-- Nút bay lên / xuống ở góc phải màn hình
+local function CreateFlyMoveButton(Name, Text, Y)
+	local Button = Instance.new("TextButton")
+	Button.Name = Name
+	Button.Size = UDim2.new(0, 112, 0, 70)
+	Button.Position = UDim2.new(1, -165, 1, Y - 40)
+	Button.BackgroundColor3 = Color3.fromRGB(27, 27, 27)
+	Button.BackgroundTransparency = 0.2
+	Button.BorderSizePixel = 1
+	Button.BorderColor3 = Color3.fromRGB(0, 0, 0)
+	Button.Text = Text
+	Button.TextSize = 26
+	Button.Visible = false
+	Button.Parent = ScreenGui
+	StyleText(Button)
+	return Button
+end
+
+FlyUpButton = CreateFlyMoveButton("FlyUp", "▲", -175)
+FlyDownButton = CreateFlyMoveButton("FlyDown", "▼", -110)
+
+FlyUpButton.InputBegan:Connect(function(Input)
+	if Input.UserInputType == Enum.UserInputType.MouseButton1
+	or Input.UserInputType == Enum.UserInputType.Touch then
+		FlyVertical = 1
+	end
+end)
+
+FlyUpButton.InputEnded:Connect(function(Input)
+	if Input.UserInputType == Enum.UserInputType.MouseButton1
+	or Input.UserInputType == Enum.UserInputType.Touch then
+		FlyVertical = 0
+	end
+end)
+
+FlyDownButton.InputBegan:Connect(function(Input)
+	if Input.UserInputType == Enum.UserInputType.MouseButton1
+	or Input.UserInputType == Enum.UserInputType.Touch then
+		FlyVertical = -1
+	end
+end)
+
+FlyDownButton.InputEnded:Connect(function(Input)
+	if Input.UserInputType == Enum.UserInputType.MouseButton1
+	or Input.UserInputType == Enum.UserInputType.Touch then
+		FlyVertical = 0
+	end
+end)
+
 -- Mở rộng Main để chứa phần Fly.
-Main.Size = UDim2.new(0, 315, 0, 325)
+Main.Size = UDim2.new(0, 315, 0, 550)
 
 FlyButton.MouseButton1Click:Connect(function()
 	if FlyEnabled then
@@ -557,11 +739,13 @@ end)
 FlySpeedMinus.MouseButton1Click:Connect(function()
 	FlySpeed = math.max(10, FlySpeed - 10)
 	FlySpeedBox.Text = tostring(FlySpeed)
+	UpdateFlySlider()
 end)
 
 FlySpeedPlus.MouseButton1Click:Connect(function()
 	FlySpeed = FlySpeed + 10
 	FlySpeedBox.Text = tostring(FlySpeed)
+	UpdateFlySlider()
 end)
 
 FlySpeedBox.FocusLost:Connect(function()
@@ -570,6 +754,7 @@ FlySpeedBox.FocusLost:Connect(function()
 	if Value then
 		FlySpeed = math.max(10, Value)
 		FlySpeedBox.Text = tostring(FlySpeed)
+		UpdateFlySlider()
 	else
 		FlySpeedBox.Text = tostring(FlySpeed)
 	end
@@ -600,7 +785,7 @@ RunService.RenderStepped:Connect(function()
 	-- Dùng hướng camera đầy đủ, bao gồm cả trục Y.
 	-- Vì vậy khi vuốt camera nhìn lên + đẩy analog tiến, Fly sẽ bay lên;
 	-- nhìn xuống + đẩy tiến thì Fly sẽ bay xuống.
-	local WorldDirection = (CameraRight * Move.X) + (CameraLook * -Move.Z)
+	local WorldDirection = (CameraRight * Move.X) + (CameraLook * -Move.Z) + Vector3.new(0, FlyVertical, 0)
 
 	if WorldDirection.Magnitude > 1 then
 		WorldDirection = WorldDirection.Unit
@@ -618,6 +803,27 @@ RunService.RenderStepped:Connect(function()
 	if FlyBG then
 		-- Chỉ dùng camera để định hướng thân nhân vật, không khóa camera.
 		FlyBG.CFrame = Camera.CFrame
+	end
+end)
+
+
+
+--========================================================--
+-- FLY SLIDER + AIRPLANE RAINBOW
+--========================================================--
+
+local SliderRainbowHue = 0
+
+RunService.RenderStepped:Connect(function(dt)
+	SliderRainbowHue = (SliderRainbowHue + dt * 0.25) % 1
+	local RainbowColor = Color3.fromHSV(SliderRainbowHue, 0.9, 1)
+
+	if FlySliderLine and FlySliderLine.Parent then
+		FlySliderLine.BackgroundColor3 = RainbowColor
+	end
+
+	if FlySliderButton and FlySliderButton.Parent then
+		FlySliderButton.TextColor3 = RainbowColor
 	end
 end)
 
@@ -962,13 +1168,14 @@ ResetButton.MouseButton1Click:Connect(function()
 
 	StopFly()
 	FlyButton.Text = "FLY ⚡ OFF"
-	FlySpeed = 80
-	FlySpeedBox.Text = "80"
+	FlySpeed = 100
+	FlySpeedBox.Text = "100"
+	UpdateFlySlider()
 
 	GameFontEnabled = false
 
 	Main.Position =
-		UDim2.new(0.5, -157, 0.5, -167)
+		UDim2.new(0.5, -157, 0.5, -207)
 
 	OpenButton.Position =
 		UDim2.new(0, 2, 0.43, 0)
@@ -1003,4 +1210,202 @@ if GlobalEnv then
 	end
 end
 
-print("⚡ DUMAVNG HUB : LOADED - ALL FEATURES OFF")
+
+
+--========================================================--
+-- BLUE FIRE EFFECT + UI BUTTON ABOVE PING
+--========================================================--
+
+local CreateBlackBatWings
+
+local FireHandsEnabled = true
+local FireObjects = {}
+local RainbowFireHue = 0
+local CharacterOutline = nil
+
+local function RemoveCharacterOutline()
+	if CharacterOutline then
+		pcall(function()
+			CharacterOutline:Destroy()
+		end)
+		CharacterOutline = nil
+	end
+end
+
+local function AddCharacterOutline()
+	RemoveCharacterOutline()
+
+	local Character = Player.Character
+	if not Character then return end
+
+	local Highlight = Instance.new("Highlight")
+	Highlight.Name = "DUMAVNG_RainbowFireOutline"
+	Highlight.Adornee = Character
+	Highlight.FillTransparency = 1
+	Highlight.OutlineTransparency = 0
+	Highlight.OutlineColor = Color3.fromHSV(RainbowFireHue, 1, 1)
+	Highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	Highlight.Parent = Character
+
+	CharacterOutline = Highlight
+end
+
+local function RemoveBatWings()
+	local Character = Player.Character
+	if Character then
+		local Wings = Character:FindFirstChild("DUMAVNG_BlackBatWings")
+		if Wings then Wings:Destroy() end
+	end
+end
+
+local function RemoveFireEffect()
+	for _,v in pairs(FireObjects) do
+		pcall(function() v:Destroy() end)
+	end
+	FireObjects = {}
+end
+
+local function AddFireEffect()
+	RemoveFireEffect()
+
+	local Character = Player.Character
+	if not Character then return end
+
+	for _,Part in ipairs(Character:GetDescendants()) do
+		if Part:IsA("BasePart") then
+			local Fire = Instance.new("Fire")
+			Fire.Name = "DUMAVNG_GokuRainbowAura"
+			Fire.Size = 2
+			Fire.Heat = 3
+			Fire.Color = Color3.fromHSV(0,1,1)
+			Fire.SecondaryColor = Color3.fromHSV(0.5,1,1)
+			Fire.Parent = Part
+			table.insert(FireObjects, Fire)
+		end
+	end
+end
+
+RunService.RenderStepped:Connect(function(dt)
+	RainbowFireHue = (RainbowFireHue + dt * 1.2) % 1
+	local Color1 = Color3.fromHSV(RainbowFireHue, 1, 1)
+	local Color2 = Color3.fromHSV((RainbowFireHue + 0.25) % 1, 1, 1)
+
+	if CharacterOutline then
+		CharacterOutline.OutlineColor = Color1
+	end
+
+	for _,v in pairs(FireObjects) do
+		if v and v.Parent then
+			v.Color = Color1
+			v.SecondaryColor = Color2
+		end
+	end
+end)
+
+local FireButton = Instance.new("TextButton")
+FireButton.Name = "FireEffectButton"
+FireButton.Size = UDim2.new(0,138,0,26)
+FireButton.Position = UDim2.new(0,2,0.43,-52)
+FireButton.BackgroundColor3 = Color3.fromRGB(18,18,18)
+FireButton.BorderSizePixel = 0
+
+FireButton.Text = "🔥 EFFECT ON"
+FireButton.TextSize = 12
+FireButton.Parent = ScreenGui
+StyleText(FireButton)
+
+FireButton.MouseButton1Click:Connect(function()
+	FireHandsEnabled = not FireHandsEnabled
+	if FireHandsEnabled then
+		FireButton.Text = "🔥 EFFECT ON"
+		AddFireEffect()
+		task.spawn(function()
+			task.wait(0.2)
+			if FireHandsEnabled and Player.Character then
+				CreateBlackBatWings()
+			end
+		end)
+	else
+		FireButton.Text = "🔥 EFFECT OFF"
+		RemoveFireEffect()
+		RemoveBatWings()
+	end
+end)
+
+Player.CharacterAdded:Connect(function()
+	task.wait(1)
+	if FireHandsEnabled then
+		AddFireEffect()
+		CreateBlackBatWings()
+	end
+	AddCharacterOutline()
+end)
+
+AddFireEffect()
+if FireHandsEnabled then
+	task.spawn(function()
+		task.wait(0.2)
+		CreateBlackBatWings()
+	end)
+end
+AddCharacterOutline()
+
+
+--========================================================--
+-- DUMAVNG HUB - BLACK BAT WINGS EFFECT
+--========================================================--
+
+CreateBlackBatWings = function()
+	local plr = game:GetService("Players").LocalPlayer
+	local char = plr.Character or plr.CharacterAdded:Wait()
+
+	local old = char:FindFirstChild("DUMAVNG_BlackBatWings")
+	if old then old:Destroy() end
+
+	local root = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+	if not root then return end
+
+	local folder = Instance.new("Folder")
+	folder.Name = "DUMAVNG_BlackBatWings"
+	folder.Parent = char
+
+	local function wing(name, side)
+		local w = Instance.new("Part")
+		w.Name = name
+		w.Size = Vector3.new(3.2,4.5,0.15)
+		w.Material = Enum.Material.SmoothPlastic
+		w.Color = Color3.fromRGB(0,0,0)
+		w.CanCollide = false
+		w.Massless = true
+		w.Parent = folder
+
+		local weld = Instance.new("Weld")
+		weld.Part0 = root
+		weld.Part1 = w
+		weld.C0 = CFrame.new(side*1.3,0.6,1.1)
+			* CFrame.Angles(0,side*math.rad(35),side*math.rad(15))
+		weld.Parent = w
+
+		local smoke = Instance.new("ParticleEmitter")
+		smoke.Texture = "rbxassetid://243660364"
+		smoke.Rate = 12
+		smoke.Lifetime = NumberRange.new(.5,1)
+		smoke.Speed = NumberRange.new(0,1)
+		smoke.Parent = w
+	end
+
+	wing("LeftBlackWing",-1)
+	wing("RightBlackWing",1)
+end
+
+if FireHandsEnabled then
+	CreateBlackBatWings()
+end
+
+game:GetService("Players").LocalPlayer.CharacterAdded:Connect(function()
+	task.wait(1)
+	if FireHandsEnabled then
+		CreateBlackBatWings()
+	end
+end)
+
